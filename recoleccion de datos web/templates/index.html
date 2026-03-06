@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description"
+    content="Escáner de prospectos en Google Maps — Encuentra negocios sin sitio web profesional." />
+  <title>Lead Optimiz — Google Maps</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="icon" type="image/png" href="/static/logo-optimiz.png" />
+</head>
+
+<body>
+
+  <div class="app-container">
+
+    <!-- ─── Header ─────────────────────────────────────────── -->
+    <header class="app-header">
+      <img src="/static/logo-optimiz.png" alt="Lead Optimiz" class="logo-img" />
+      <h1>Lead Optimiz</h1>
+      <p class="subtitle">Encuentra negocios sin presencia web en Google Maps</p>
+    </header>
+
+    <!-- ─── Search Card ────────────────────────────────────── -->
+    <section class="card" id="search-card">
+      <div class="card-title"><span class="icon">🔎</span> Panel de Búsqueda</div>
+
+      <form id="scan-form" autocomplete="off">
+        <div class="search-grid">
+          <div class="form-group">
+            <label for="input-rubro">Rubro / Categoría</label>
+            <input type="text" id="input-rubro" placeholder="Ej: Veterinarias, Restaurantes…" required />
+          </div>
+          <div class="form-group">
+            <label for="input-depto">Departamento / Ciudad</label>
+            <input type="text" id="input-depto" placeholder="Ej: Paysandú, Montevideo…" required />
+          </div>
+        </div>
+
+        <div class="checkbox-row">
+          <input type="checkbox" id="chk-headless" checked />
+          <label for="chk-headless">Modo invisible (headless) — Sin abrir ventana del navegador</label>
+        </div>
+
+        <div class="actions-row">
+          <button type="submit" class="btn btn-primary" id="btn-scan">
+            <span id="btn-scan-text">Iniciar Escaneo</span>
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <!-- ─── Progress Card ──────────────────────────────────── -->
+    <section class="card progress-section" id="progress-section">
+      <div class="card-title"><span class="icon">⚙️</span> Progreso del Escaneo</div>
+
+      <div class="progress-bar-wrapper">
+        <div class="progress-bar-fill" id="progress-fill"></div>
+      </div>
+
+      <div class="progress-info">
+        <span class="progress-text" id="progress-text">Esperando…</span>
+        <span class="progress-pct" id="progress-pct">0%</span>
+      </div>
+    </section>
+
+    <!-- ─── Results Card ───────────────────────────────────── -->
+    <section class="results-section" id="results-section">
+      <!-- Stats -->
+      <div class="results-stats">
+        <div class="stat-badge">
+          <span class="stat-value" id="stat-total">0</span>
+          <span class="stat-label">Prospectos encontrados</span>
+        </div>
+        <div class="stat-badge">
+          <span class="stat-value" id="stat-displayed">0</span>
+          <span class="stat-label">Mostrados</span>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="card">
+        <div class="card-title"><span class="icon">🎯</span> Resultados</div>
+
+        <div class="filters-row">
+          <input type="text" id="filter-input" placeholder="Buscar por nombre, teléfono o situación…" />
+          <button class="filter-toggle" id="filter-toggle" type="button">🔥 ≥ 50 reseñas</button>
+        </div>
+
+        <!-- Table -->
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th data-col="Nombre">Nombre <span class="sort-icon">↕</span></th>
+                <th data-col="Telefono">Teléfono <span class="sort-icon">↕</span></th>
+                <th data-col="Estrellas">Estrellas <span class="sort-icon">↕</span></th>
+                <th data-col="Reseñas">Reseñas <span class="sort-icon">↕</span></th>
+                <th data-col="Situacion">Situación <span class="sort-icon">↕</span></th>
+              </tr>
+            </thead>
+            <tbody id="table-body">
+              <tr>
+                <td colspan="5">
+                  <div class="empty-state">
+                    <div class="empty-icon">📋</div>
+                    <p>Los resultados aparecerán aquí cuando el escaneo finalice.</p>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Export -->
+        <div class="export-row">
+          <button class="btn btn-secondary btn-sm" id="btn-export-csv" type="button">
+            📄 Descargar CSV
+          </button>
+          <button class="btn btn-secondary btn-sm" id="btn-export-xlsx" type="button">
+            📊 Descargar Excel
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Footer ─────────────────────────────────────────── -->
+    <footer class="app-footer">
+      &copy; 2026 Lead Optimiz — Todos los derechos reservados
+    </footer>
+
+  </div>
+
+  <!-- Toast container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+
+</html>
