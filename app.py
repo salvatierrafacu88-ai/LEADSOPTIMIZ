@@ -1,4 +1,3 @@
-import streamlit as st
 import pandas as pd
 from webdriver_manager.chrome import ChromeDriverManager
 import time
@@ -126,5 +125,6 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     # Es vital que el host sea '0.0.0.0'
     app.run(host='0.0.0.0', port=port)
+
 
 
