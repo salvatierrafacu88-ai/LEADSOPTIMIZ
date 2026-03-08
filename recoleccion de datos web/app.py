@@ -123,3 +123,10 @@ if btn_buscar:
             st.info("No se encontraron prospectos.")
     else:
         st.error("Faltan datos de búsqueda.")
+
+if __name__ == "__main__":
+    # Esto lee el puerto que Railway te asigne automáticamente
+    import os
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
+
