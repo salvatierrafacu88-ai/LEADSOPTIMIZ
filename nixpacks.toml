@@ -1,0 +1,8 @@
+[phases.setup]
+aptPkgs = ["...", "google-chrome-stable", "chromium", "chromium-driver"]
+
+[phases.build]
+cmds = ["pip install -r requirements.txt"]
+
+[start]
+cmd = "python app.py"

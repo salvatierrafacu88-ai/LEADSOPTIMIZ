@@ -1,0 +1,8 @@
+flask
+pandas
+selenium
+webdriver-manager
+openpyxl
+python-dotenv
+
+
