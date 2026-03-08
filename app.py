@@ -12,130 +12,153 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 
-# --- CONFIGURACIÓN DE INTERFAZ ---
-st.set_page_config(page_title="Scanner de Leads", layout="centered")
+# ─── Configuración de la App ─────────────────────────────────────────────────
+app = Flask(__name__)
 
-st.title("🔍 Google Maps Lead Hunter")
-st.markdown("Busca locales que **no tienen web** o solo usan redes sociales.")
+# Estado global para el escaneo
+scan_results = []
+scan_running = False
+progress_queues = []
 
-# --- ENTRADAS DE USUARIO ---
-with st.sidebar:
-    st.header("Parámetros")
-    rubro = st.text_input("Rubro", placeholder="Ej: Veterinaria")
-    depto = st.text_input("Departamento", placeholder="Ej: Paysandú")
-    limite = st.slider("Locales a escanear", 5, 40, 15)
-    btn_buscar = st.button("🚀 Iniciar Escaneo")
+EXCLUDE_LIST = [
+    "facebook.com", "instagram.com", "whatsapp.com", "linktr.ee",
+    "twitter.com", "x.com", "pedidosya.com", "tripadvisor.com",
+    "tiktok.com", "youtube.com",
+]
 
-# --- LÓGICA DEL SCRAPER (HEADLESS) ---
-def buscar_leads_cloud(rubro, departamento, limite):
+# ─── Lógica del Scraper ──────────────────────────────────────────────────────
+
+def _broadcast(event, data):
+    """Envía actualizaciones en tiempo real a la interfaz web."""
+    msg = f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+    for q in progress_queues:
+        try:
+            q.put_nowait(msg)
+        except:
+            pass
+
+def _run_scan(rubro, depto, limite):
+    global scan_results, scan_running
+    scan_running = True
+    scan_results = []
+    
+    _broadcast("status", {"message": "Iniciando navegador...", "progress": 10})
+    
     chrome_options = Options()
-    chrome_options.add_argument("--headless")  # CRÍTICO PARA EL HOSTING
+    chrome_options.add_argument("--headless=new") # Obligatorio para Railway
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    
-    exclude_list = ["facebook.com", "instagram.com", "whatsapp.com", "linktr.ee", "twitter.com", "pedidosya.com", "tripadvisor.com"]
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--window-size=1920,1080")
 
+    driver = None
     try:
         service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=chrome_options)
         
-        query = f"{rubro}+en+{departamento}"
-        driver.get(f"https://www.google.com/maps/search/{query}")
+        query = f"{rubro} en {depto}"
+        driver.get(f"https://www.google.com/maps/search/{query.replace(' ', '+')}")
         time.sleep(5)
 
-        leads_finales = []
-        locales = driver.find_elements(By.CLASS_NAME, "hfpxzc") 
+        # Lógica de scroll básica
+        _broadcast("status", {"message": "Buscando locales...", "progress": 30})
         
-        progreso = st.progress(0)
-        
-        for i, local in enumerate(locales[:limite]):
+        locales = driver.find_elements(By.CLASS_NAME, "hfpxzc")
+        total_a_escanear = min(len(locales), limite)
+
+        for i in range(total_a_escanear):
             try:
-                progreso.progress((i + 1) / limite)
-                driver.execute_script("arguments[0].scrollIntoView();", local)
-                local.click()
-                time.sleep(2.5)
+                # Refrescar lista de elementos
+                locales = driver.find_elements(By.CLASS_NAME, "hfpxzc")
+                if i >= len(locales): break
                 
-                nombre = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
+                nombre = locales[i].get_attribute("aria-label")
+                locales[i].click()
+                time.sleep(2)
+
+                website = "N/A"
+                try:
+                    web_el = driver.find_element(By.CSS_SELECTOR, "a[data-item-id='authority']")
+                    website = web_el.get_attribute("href")
+                except:
+                    pass
+
+                # Filtrar si no tiene web o es solo redes sociales
+                es_red_social = any(domain in website.lower() for domain in EXCLUDE_LIST)
                 
-                # Estrellas y Reseñas
-                try:
-                    estrellas = driver.find_element(By.CSS_SELECTOR, "span.ce9N9c").text
-                    resenas = driver.find_element(By.CSS_SELECTOR, "button.HHvVdb").text.replace("(","").replace(")","")
-                except:
-                    estrellas, resenas = "N/A", "0"
+                lead = {
+                    "Nombre": nombre,
+                    "Web": website,
+                    "Situacion": "Sin Web" if website == "N/A" else ("Solo Redes Sociales" if es_red_social else "Tiene Web")
+                }
 
-                # Teléfono
-                try:
-                    telefono = driver.find_element(By.CSS_SELECTOR, "[data-tooltip='Copiar el número de teléfono']").text
-                except:
-                    telefono = "No disponible"
+                if website == "N/A" or es_red_social:
+                    scan_results.append(lead)
+                    _broadcast("lead", lead)
 
-                # Verificación de Web
-                prospecto = False
-                nota = ""
-                try:
-                    web_btn = driver.find_element(By.CSS_SELECTOR, "a[aria-label*='Sitio web']")
-                    url_real = web_btn.get_attribute("href").lower()
-                    if any(red in url_real for red in exclude_list):
-                        nota = "Solo redes sociales"
-                        prospecto = True
-                except:
-                    nota = "Sin presencia web"
-                    prospecto = True
+                progreso = int(30 + (i / total_a_escanear) * 60)
+                _broadcast("status", {"message": f"Analizando: {nombre}", "progress": progreso})
 
-                if prospecto:
-                    leads_finales.append({
-                        "Nombre": nombre,
-                        "Estrellas": estrellas,
-                        "Reseñas": resenas,
-                        "Telefono": telefono,
-                        "Situacion": nota
-                    })
-            except:
+            except Exception:
                 continue
 
-        driver.quit()
-        return leads_finales
+        _broadcast("status", {"message": "Escaneo finalizado", "progress": 100})
+        _broadcast("done", {"total": len(scan_results)})
+
     except Exception as e:
-        st.error(f"Error en el servidor: {e}")
-        return []
+        _broadcast("error", {"message": str(e)})
+    finally:
+        if driver:
+            driver.quit()
+        scan_running = False
 
-# --- RESULTADOS EN PANTALLA ---
-if btn_buscar:
-    if rubro and depto:
-        with st.spinner("Escaneando Google Maps..."):
-            data = buscar_leads_cloud(rubro, depto, limite)
-            
-        if data:
-            st.success(f"¡Se encontraron {len(data)} prospectos!")
-            df = pd.DataFrame(data)
-            
-            # Vista para Celular (Expanders)
-            for _, row in df.iterrows():
-                with st.expander(f"📍 {row['Nombre']}"):
-                    st.write(f"📞 **Tel:** {row['Telefono']}")
-                    st.write(f"⭐ **Puntos:** {row['Estrellas']} | 💬 **Reseñas:** {row['Reseñas']}")
-                    st.write(f"🚩 **Estado:** {row['Situacion']}")
-                    
-                    # Botón de llamada rápida para móvil
-                    tel_url = row['Telefono'].replace(" ", "").replace("\n", "")
-                    st.markdown(f"[📞 Llamar ahora](tel:{tel_url})")
+# ─── Rutas de Flask ──────────────────────────────────────────────────────────
 
-            # Botón de descarga
-            csv = df.to_csv(index=False).encode('utf-8-sig')
-            st.download_button("📥 Descargar Excel (CSV)", csv, "leads.csv", "text/csv")
-        else:
-            st.info("No se encontraron prospectos.")
-    else:
-        st.error("Faltan datos de búsqueda.")
+@app.route('/')
+def index():
+    return render_template('index.html')
 
+@app.route('/start', methods=['POST'])
+def start_scan():
+    global scan_running
+    if scan_running:
+        return jsonify({"error": "Escaneo ya en curso"}), 400
+        
+    data = request.json
+    rubro = data.get('rubro')
+    depto = data.get('depto')
+    limite = int(data.get('limite', 15))
+    
+    threading.Thread(target=_run_scan, args=(rubro, depto, limite)).start()
+    return jsonify({"status": "started"})
+
+@app.route('/events')
+def events():
+    def stream():
+        q = queue.Queue()
+        progress_queues.append(q)
+        try:
+            while True:
+                yield q.get()
+        except GeneratorExit:
+            progress_queues.remove(q)
+    return Response(stream(), mimetype='text/event-stream')
+
+@app.route('/export')
+def export():
+    if not scan_results:
+        return "No hay datos", 404
+    df = pd.DataFrame(scan_results)
+    buf = io.StringIO()
+    df.to_csv(buf, index=False, encoding="utf-8-sig")
+    return Response(
+        buf.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=leads.csv"}
+    )
+
+# ─── Configuración para Railway ──────────────────────────────────────────────
 if __name__ == "__main__":
-    import os
-    # Railway te da el puerto en esta variable. Si no existe, usa el 5000.
+    # Railway inyecta el puerto en la variable de entorno PORT
     port = int(os.environ.get("PORT", 5000))
-    # Es vital que el host sea '0.0.0.0'
     app.run(host='0.0.0.0', port=port)
-
-
-
-
