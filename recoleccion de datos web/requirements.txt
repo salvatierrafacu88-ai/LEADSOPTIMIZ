@@ -1,5 +1,8 @@
-streamlit
+flask
+pandas
 selenium
 webdriver-manager
-pandas
+openpyxl
+python-dotenv
+
 
