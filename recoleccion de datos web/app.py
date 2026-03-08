@@ -125,8 +125,9 @@ if btn_buscar:
         st.error("Faltan datos de búsqueda.")
 
 if __name__ == "__main__":
-    # Esto lee el puerto que Railway te asigne automáticamente
     import os
+    # Railway te da el puerto en esta variable. Si no existe, usa el 5000.
     port = int(os.environ.get("PORT", 5000))
+    # Es vital que el host sea '0.0.0.0'
     app.run(host='0.0.0.0', port=port)
 
