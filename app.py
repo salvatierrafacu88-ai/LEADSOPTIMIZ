@@ -2,131 +2,85 @@ import streamlit as st
 import pandas as pd
 import time
 import os
-import io
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 
-# --- CONFIGURACIÓN DE INTERFAZ (Tu diseño original) ---
-st.set_page_config(page_title="Scanner de Leads", layout="centered")
+# --- 1. ESTILOS CSS PARA DISEÑO "APP" ---
+st.set_page_config(page_title="Lead Hunter Pro", layout="centered")
 
-st.title("🔍 Google Maps Lead Hunter")
-st.markdown("Busca locales que **no tienen web** o solo usan redes sociales.")
+st.markdown("""
+    <style>
+    .main { background-color: #f5f7f9; }
+    .stButton>button { width: 100%; border-radius: 10px; height: 3em; background-color: #FF4B4B; color: white; }
+    .lead-card {
+        background-color: white;
+        padding: 20px;
+        border-radius: 15px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        margin-bottom: 15px;
+        border-left: 5px solid #FF4B4B;
+    }
+    .call-button {
+        display: inline-block;
+        padding: 10px 20px;
+        background-color: #25D366;
+        color: white !important;
+        text-decoration: none;
+        border-radius: 8px;
+        font-weight: bold;
+        text-align: center;
+        width: 100%;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-# --- BARRA LATERAL (Tu diseño original) ---
+# --- 2. INTERFAZ ---
+st.title("🎯 Lead Hunter Pro")
+st.subheader("Encuentra clientes sin sitio web")
+
 with st.sidebar:
-    st.header("Parámetros")
-    rubro = st.text_input("Rubro", placeholder="Ej: Veterinaria")
-    depto = st.text_input("Departamento", placeholder="Ej: Paysandú")
-    limite = st.slider("Locales a escanear", 5, 40, 15)
-    btn_buscar = st.button("🚀 Iniciar Escaneo", use_container_width=True)
+    st.header("Configuración")
+    rubro = st.text_input("¿Qué buscas?", placeholder="Ej: Odontólogo")
+    depto = st.text_input("¿Dónde?", placeholder="Ej: Montevideo")
+    limite = st.slider("Cantidad", 5, 50, 15)
+    btn_buscar = st.button("🚀 EMPEZAR ESCANEO")
 
-# Lista de exclusión (Redes sociales que cuentan como "sin web propia")
-EXCLUDE_LIST = ["facebook.com", "instagram.com", "whatsapp.com", "linktr.ee", "twitter.com", "x.com", "pedidosya.com"]
-
-# --- LÓGICA DEL SCRAPER (Headless para servidores) ---
-def buscar_leads_cloud(rubro, depto, limite):
-    chrome_options = Options()
-    chrome_options.add_argument("--headless") 
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    
-    # Ruta para Chromium en Linux (Streamlit Cloud/Railway)
+# --- 3. LÓGICA DEL BOT ---
+def scannear_google_maps(rubro, depto, limite):
+    opts = Options()
+    opts.add_argument("--headless")
+    opts.add_argument("--no-sandbox")
+    opts.add_argument("--disable-dev-shm-usage")
     if os.path.exists("/usr/bin/chromium"):
-        chrome_options.binary_location = "/usr/bin/chromium"
+        opts.binary_location = "/usr/bin/chromium"
 
     try:
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-        
-        query = f"{rubro} en {depto}"
-        driver.get(f"https://www.google.com/maps/search/{query.replace(' ', '+')}")
+        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
+        driver.get(f"https://www.google.com/maps/search/{rubro}+in+{depto}")
         time.sleep(5)
 
-        leads_finales = []
-        locales = driver.find_elements(By.CLASS_NAME, "hfpxzc") 
+        leads = []
+        elementos = driver.find_elements(By.CLASS_NAME, "hfpxzc")
         
         progreso = st.progress(0)
-        
-        for i, local in enumerate(locales[:limite]):
+        for i, el in enumerate(elementos[:limite]):
+            progreso.progress((i + 1) / limite)
             try:
-                progreso.progress((i + 1) / limite)
-                local.click()
-                time.sleep(2.5)
-                
+                el.click()
+                time.sleep(2)
                 nombre = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
                 
-                # Estrellas y Reseñas
+                # Intentar sacar teléfono
                 try:
-                    estrellas = driver.find_element(By.CSS_SELECTOR, "span.ce9N9c").text
-                    resenas = driver.find_element(By.CSS_SELECTOR, "button.HHvVdb").text.replace("(","").replace(")","")
+                    tel = driver.find_element(By.CSS_SELECTOR, "[data-tooltip='Copiar el número de teléfono']").text
                 except:
-                    estrellas, resenas = "N/A", "0"
+                    tel = "Sin teléfono"
 
-                # Teléfono
-                try:
-                    telefono_el = driver.find_element(By.CSS_SELECTOR, "[data-tooltip='Copiar el número de teléfono']")
-                    telefono = telefono_el.text
-                except:
-                    telefono = "No disponible"
-
-                # Verificación de Web
-                prospecto = False
+                # Lógica de Prospecto (Si no hay web o es red social)
+                es_prospecto = False
                 nota = ""
                 try:
-                    web_btn = driver.find_element(By.CSS_SELECTOR, "a[aria-label*='Sitio web']")
-                    url_real = web_btn.get_attribute("href").lower()
-                    if any(red in url_real for red in EXCLUDE_LIST):
-                        nota = "Solo redes sociales"
-                        prospecto = True
-                except:
-                    nota = "Sin presencia web"
-                    prospecto = True
-
-                if prospecto:
-                    leads_finales.append({
-                        "Nombre": nombre,
-                        "Estrellas": estrellas,
-                        "Reseñas": resenas,
-                        "Telefono": telefono,
-                        "Situacion": nota
-                    })
-            except:
-                continue
-
-        driver.quit()
-        return leads_finales
-    except Exception as e:
-        st.error(f"Error técnico: {e}")
-        return []
-
-# --- RESULTADOS EN PANTALLA (Tu diseño original) ---
-if btn_buscar:
-    if rubro and depto:
-        with st.spinner("Escaneando Google Maps..."):
-            data = buscar_leads_cloud(rubro, depto, limite)
-            
-        if data:
-            st.success(f"¡Se encontraron {len(data)} prospectos!")
-            df = pd.DataFrame(data)
-            
-            # Vista para Celular (Expanders - Tu diseño favorito)
-            for _, row in df.iterrows():
-                with st.expander(f"📍 {row['Nombre']}"):
-                    st.write(f"📞 **Tel:** {row['Telefono']}")
-                    st.write(f"⭐ **Puntos:** {row['Estrellas']} | 💬 **Reseñas:** {row['Reseñas']}")
-                    st.write(f"🚩 **Estado:** {row['Situacion']}")
-                    
-                    # Botón de llamada rápida para móvil
-                    tel_url = row['Telefono'].replace(" ", "").replace("\n", "").replace("-", "")
-                    st.markdown(f"[📞 Llamar ahora](tel:{tel_url})")
-
-            # Botón de descarga
-            csv = df.to_csv(index=False).encode('utf-8-sig')
-            st.download_button("📥 Descargar Excel (CSV)", csv, f"leads_{depto}.csv", "text/csv")
-        else:
-            st.info("No se encontraron prospectos.")
-    else:
-        st.error("Faltan datos de búsqueda en la barra lateral.")
+                    web = driver.find_element(By.CSS_SELECTOR, "a[aria
