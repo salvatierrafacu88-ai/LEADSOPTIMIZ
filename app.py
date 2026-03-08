@@ -1,6 +1,16 @@
-import pandas as pd
-from webdriver_manager.chrome import ChromeDriverManager
+import json
+import queue
+import threading
 import time
+import io
+import os
+import pandas as pd
+from flask import Flask, render_template, request, jsonify, Response, send_file
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from webdriver_manager.chrome import ChromeDriverManager
 
 # --- CONFIGURACIÓN DE INTERFAZ ---
 st.set_page_config(page_title="Scanner de Leads", layout="centered")
@@ -125,6 +135,7 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     # Es vital que el host sea '0.0.0.0'
     app.run(host='0.0.0.0', port=port)
+
 
 
 
