@@ -5,12 +5,36 @@ from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 import time
 
-def buscar_leads_con_metricas(rubro, departamento):
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service)
-    
-    query = f"{rubro}+en+{departamento}"
-    driver.get(f"https://www.google.com/maps/search/{query}")
+def _run_scan(search_query: str, broadcast_func):
+    """
+    Función interna que corre en un hilo separado.
+    Configura el driver para Railway/Linux y realiza el scraping.
+    """
+    driver = None
+    try:
+        broadcast_func({"status": "starting", "message": "Iniciando navegador en el servidor..."})
+        
+        # --- CONFIGURACIÓN PARA RAILWAY (LINUX HEADLESS) ---
+        chrome_options = Options()
+        chrome_options.add_argument("--headless=new") # Obligatorio en la nube
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--window-size=1920,1080")
+        # User agent para evitar bloqueos básicos
+        chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+        # Inicializar el driver usando webdriver-manager
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        
+        # --- INICIO DE LA LÓGICA DE BÚSQUEDA ---
+        driver.get("https://www.google.com/maps")
+        time.sleep(3)
+        
+        # Aquí continúa tu lógica original de:
+        # search_box = driver.find_element(By.ID, "searchboxinput")
+        # ... etc
     time.sleep(6)
 
     leads_finales = []
@@ -91,4 +115,5 @@ def buscar_leads_con_metricas(rubro, departamento):
         print("\n❌ No se encontraron prospectos.")
 
 # Ejecución
+
 buscar_leads_con_metricas("Veterinarias", "Paysandú")
